@@ -1,29 +1,34 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
+const morgan = require("morgan");
+
+dotenv.config();
 
 const app = express();
-dotenv.config();
-const HOST = process.env.HOST;
-const PORT = process.env.PORT;
+app.use(express.json());
+app.use(morgan("dev"));
+
+const authRouter = require("./routes/auth");
+
+const HOST = process.env.HOST || "localhost";
+const PORT = process.env.PORT || 8000;
 const MONGO_URL = process.env.MONGO_URL;
-app.get("/", (req, res) => {
-  const h1 = "<h1>Hello everyone</h1>";
-  res.send(h1);
-});
-app.get("/home", (req, res) => {
-  const h1 = "<h1>Hello Home</h1>";
-  res.send(h1);
-});
+
+// Routes
+app.use("/api/public/auth", authRouter);
 
 const startServer = async () => {
   try {
     await mongoose.connect(MONGO_URL);
-    app.listen(8000, () => {
+    console.log("Database connected");
+
+    app.listen(PORT, () => {
       console.log(`Server is listening on http://${HOST}:${PORT}`);
     });
   } catch (error) {
     console.error(error);
   }
 };
+
 startServer();

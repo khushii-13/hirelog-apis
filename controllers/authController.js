@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/user");
+const jwt = require("jsonwebtoken");
 
 const register = async (req, res) => {
   try {
@@ -39,18 +40,66 @@ const register = async (req, res) => {
   }
 };
 
-const login = async (req, res) =>{
- return res.status(200).json({
-    message  : "Login hitted succesfully",
-    htoken : "abc1237kkk"
- })
-}
+const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email and password are required",
+      });
+    }
+    const userExists = await User.findOne({ email });
+    if (!userExists) {
+      return res.status(400).json({
+        message: "User not found",
+      });
+    }
 
-const getUser = async (req,res)=>{
-    
+    const isPasswordMatch = await bcrypt.compare(password, userExists.password);
+    if (!isPasswordMatch) {
+      return res.status(400).json({
+        message: "Invalid credentials",
+      });
+    }
+
+    const data = {
+      id: userExists._id,
+      email: userExists.email,
+    };
+    const SECRET_KEY = process.env.SECRET_KEY;
+    const token = jwt.sign(data, SECRET_KEY, { expiresIn: "2h" });
+
     return res.status(200).json({
-    message  : "Get user hitted succesfully",
-    data : req.headers.htoken
- })
+      message: "Login successful",
+      htoken: token,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+const getUser = async (req, res) => {
+try {
+
+  const user = req.user;
+  const dbUser = await User.findOne({_id : user.id});
+  if(!dbUser){
+    return res.status(400).json({
+      message : "User Not Found"
+    })
+  }
+  return res.status(200).json({
+    message: "User found succesfully",
+    data: dbUser,
+  });
+} catch (error) {
+      return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
 }
-module.exports = { register, login, getUser};
+};
+module.exports = { register, login, getUser };

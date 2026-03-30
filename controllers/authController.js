@@ -85,7 +85,7 @@ const getUser = async (req, res) => {
 try {
 
   const user = req.user;
-  const dbUser = await User.findOne({_id : user.id});
+  const dbUser = await User.findOne({_id : user.id}).select("-password");
   if(!dbUser){
     return res.status(400).json({
       message : "User Not Found"

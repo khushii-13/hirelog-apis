@@ -10,6 +10,7 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 const authRouter = require("./routes/auth");
+const jobRouter = require("./routes/job");
 
 const HOST = process.env.HOST || "localhost";
 const PORT = process.env.PORT || 8000;
@@ -17,6 +18,7 @@ const MONGO_URL = process.env.MONGO_URL;
 
 // Routes
 app.use("/api/public/auth", authRouter);
+app.use("/api/private/job", jobRouter);
 
 const startServer = async () => {
   try {

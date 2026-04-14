@@ -65,6 +65,7 @@ const login = async (req, res) => {
     const data = {
       id: userExists._id,
       email: userExists.email,
+      role: userExists.role,
     };
     const SECRET_KEY = process.env.SECRET_KEY;
     const token = jwt.sign(data, SECRET_KEY, { expiresIn: "2h" });

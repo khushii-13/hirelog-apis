@@ -1,4 +1,5 @@
 const Job = require("../models/job");
+const mongoose = require("mongoose");
 
 const createJob = async (req, res) => {
   try {
@@ -29,7 +30,6 @@ const createJob = async (req, res) => {
       });
     }
 
-
     if (!Array.isArray(skillsRequired) || skillsRequired.length === 0) {
       return res.status(400).json({
         message: "skillsRequired must be a non-empty array",
@@ -37,13 +37,10 @@ const createJob = async (req, res) => {
     }
 
     const normalizedSkills = skillsRequired.map((skill) =>
-      skill.trim().toLowerCase()
+      skill.trim().toLowerCase(),
     );
 
-    if (
-      experience &&
-      (experience.min < 0 || experience.max < experience.min)
-    ) {
+    if (experience && (experience.min < 0 || experience.max < experience.min)) {
       return res.status(400).json({
         message: "Invalid experience range",
       });
@@ -74,7 +71,6 @@ const createJob = async (req, res) => {
       message: "Job created successfully",
       data: job,
     });
-
   } catch (error) {
     console.error(error);
     return res.status(500).json({
@@ -83,4 +79,38 @@ const createJob = async (req, res) => {
   }
 };
 
-module.exports = { createJob };
+const getJobs = async (req, res) => {
+  try {
+    const userId = req.query.id;
+    
+
+
+    let query = {
+      isActive: true,
+      isDeleted: false,
+    };
+
+    if (userId) {
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return res.status(400).json({
+          message: "Invalid user ID format",
+        });
+      }
+      query.createdBy = new mongoose.Types.ObjectId(userId);
+    }
+
+    const jobs = await Job.find(query);
+
+    return res.status(200).json({
+      message: "Jobs fetched successfully",
+      data: jobs,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};
+module.exports = { createJob, getJobs };

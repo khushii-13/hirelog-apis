@@ -18,7 +18,6 @@ DELETE /jobs/:id              -> Soft delete job (isDeleted = true)
 GET    /jobs/:id              -> Get single job
 GET    /jobs                  -> Get all jobs (with filters)
 
-GET    /jobs/employer/my-jobs -> Employer's jobs
 PATCH  /jobs/:id/toggle       -> Activate/Deactivate job
 
 ==========================

@@ -5,5 +5,5 @@ const authMiddleware = require("../middlewares/authMiddleware");
 const roleMiddleware = require("../middlewares/roleMiddleware");
 
 jobRouter.post("/create-job",authMiddleware, roleMiddleware(['employer']), createJob);
-jobRouter.get("/get-jobs", authMiddleware, getJobs);
+jobRouter.post("/get-jobs", authMiddleware, getJobs);
 module.exports = jobRouter;

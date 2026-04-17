@@ -81,33 +81,119 @@ const createJob = async (req, res) => {
 
 const getJobs = async (req, res) => {
   try {
-    const userId = req.query.id;
-    
-
+    const {
+      title,
+      companyName,
+      location,
+      jobType,
+      experience,
+      salary,
+      skillsRequired,
+      createdBy,
+      page = 1,
+      limit = 10
+    } = req.body;
 
     let query = {
       isActive: true,
       isDeleted: false,
     };
 
-    if (userId) {
-      if (!mongoose.Types.ObjectId.isValid(userId)) {
+    // 🔹 Text filters
+    if (title) {
+      query.title = { $regex: title, $options: "i" };
+    }
+
+    if (companyName) {
+      query.companyName = { $regex: companyName, $options: "i" };
+    }
+
+    if (location) {
+      query.location = { $regex: location, $options: "i" };
+    }
+
+    if (jobType) {
+      query.jobType = jobType;
+    }
+
+    // if (experience) {
+    //   query.$and = query.$and || [];
+
+    //   if (experience.min !== undefined) {
+    //     query.$and.push({
+    //       "experience.max": { $gte: experience.min }
+    //     });
+    //   }
+
+    //   if (experience.max !== undefined) {
+    //     query.$and.push({
+    //       "experience.min": { $lte: experience.max }
+    //     });
+    //   }
+    // }
+
+    // if (salary) {
+    //   query.$and = query.$and || [];
+
+    //   if (salary.min !== undefined) {
+    //     query.$and.push({
+    //       "salary.max": { $gte: salary.min }
+    //     });
+    //   }
+
+    //   if (salary.max !== undefined) {
+    //     query.$and.push({
+    //       "salary.min": { $lte: salary.max }
+    //     });
+    //   }
+    // }
+
+    // 🔹 Skills
+    if (skillsRequired && skillsRequired.length > 0) {
+      query.skillsRequired = { $in: skillsRequired };
+    }
+
+    // 🔹 createdBy
+    if (createdBy) {
+      if (!mongoose.Types.ObjectId.isValid(createdBy)) {
         return res.status(400).json({
+          success: false,
           message: "Invalid user ID format",
         });
       }
-      query.createdBy = new mongoose.Types.ObjectId(userId);
+      query.createdBy = new mongoose.Types.ObjectId(createdBy);
     }
 
-    const jobs = await Job.find(query);
+    // 🔹 Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const jobs = await Job.find(query)
+      .skip(skip)
+      .limit(limitNum);
+
+    const totalCount = await Job.countDocuments(query);
+    const totalPages = Math.ceil(totalCount / limitNum);
 
     return res.status(200).json({
-      message: "Jobs fetched successfully",
+      success: true,
+      message: "Jobs retrieved successfully",
       data: jobs,
+      pagination: {
+        currentPage: pageNum,
+        pageSize: limitNum,
+        totalItems: totalCount,
+        totalPages: totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+      },
     });
+
   } catch (error) {
     console.error(error);
     return res.status(500).json({
+      success: false,
       message: "Internal Server Error",
       error: error.message,
     });

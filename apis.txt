@@ -12,42 +12,29 @@ GET    /auth/get-user
 5. JOB APIs (EMPLOYER)
 ======================
 
-POST   /jobs                  -> Create job
-PUT    /jobs/:id              -> Edit job
-DELETE /jobs/:id              -> Soft delete job (isDeleted = true)
-GET    /jobs/:id              -> Get single job
-GET    /jobs                  -> Get all jobs (with filters)
+POST   /create-job              -> Create job
+PUT    /update-job/:id              -> Edit job
+DELETE /delete-job/:id              -> Soft delete job (isDeleted = true)
+GET    /get-job/:id              -> Get single job
+POST    /get-jobs                  -> Get all jobs (with filters)
 
 PATCH  /jobs/:id/toggle       -> Activate/Deactivate job
 
-==========================
-6. JOB FILTERING (IMPORTANT)
-============================
-
-GET /jobs?location=Delhi&experience=2&jobType=Full-Time&search=react
-
-Filters:
-
-* location
-* experience
-* jobType
-* salary range
-* keyword search
 
 ==========================
-7. JOB APPLICATION APIs
+6. JOB APPLICATION APIs
 =======================
 
-POST   /applications                  -> Apply to job
-GET    /applications/user            -> My applications (job seeker)
-GET    /applications/job/:jobId      -> Applicants for a job (employer)
-PATCH  /applications/:id/status      -> Update status (shortlist/reject)
-DELETE /applications/:id             -> Withdraw application
+POST   /apply               -> Apply to job (job seeker)
+GET    /get-my-applications          -> My applications (job seeker)
+GET    /get-job-applications/:jobId      -> Applicants for a job (employer)
+PATCH  /applications/:id/status      -> Update status (shortlist/reject) (employer)
+DELETE /applications/:id             -> Withdraw application  (job seeker)
 
 
 ==========================
 8. DASHBOARD APIs
 =======================
 
-GET    /dashboard      
+GET    /dashboard   (job seeker) (employer)     
 

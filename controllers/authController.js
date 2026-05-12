@@ -1,23 +1,21 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/user");
 const jwt = require("jsonwebtoken");
+const sendResponse = require("../utils/response");
+const errorHandler = require("../utils/error");
 
 const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
     if (!name || !email || !password || !role) {
-      return res.status(400).json({
-        message: "All fields are required",
-      });
+      return sendResponse(res, 400, false, "All fields are required");
     }
 
     const userExists = await User.findOne({ email });
 
     if (userExists) {
-      return res.status(400).json({
-        message: "User already exists",
-      });
+      return sendResponse(res, 400, false, "User already exists");
     }
 
     const hashPassword = await bcrypt.hash(password, 10);
@@ -29,14 +27,9 @@ const register = async (req, res) => {
       role,
     });
 
-    return res.status(201).json({
-      message: "User created successfully",
-    });
+    return sendResponse(res, 201, true, "User created successfully");
   } catch (error) {
-    return res.status(500).json({
-      message: "Server error",
-      error: error.message,
-    });
+    return errorHandler(error, res);
   }
 };
 
@@ -44,22 +37,16 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({
-        message: "Email and password are required",
-      });
+      return sendResponse(res, 400, false, "Email and password are required");
     }
     const userExists = await User.findOne({ email });
     if (!userExists) {
-      return res.status(400).json({
-        message: "User not found",
-      });
+      return sendResponse(res, 400, false, "User not found");
     }
 
     const isPasswordMatch = await bcrypt.compare(password, userExists.password);
     if (!isPasswordMatch) {
-      return res.status(400).json({
-        message: "Invalid credentials",
-      });
+      return sendResponse(res, 400, false, "Invalid credentials");
     }
 
     const data = {
@@ -70,15 +57,9 @@ const login = async (req, res) => {
     const SECRET_KEY = process.env.SECRET_KEY;
     const token = jwt.sign(data, SECRET_KEY, { expiresIn: "2h" });
 
-    return res.status(200).json({
-      message: "Login successful",
-      htoken: token,
-    });
+    return sendResponse(res, 200, true, "Login successful", { token });
   } catch (error) {
-    return res.status(500).json({
-      message: "Server error",
-      error: error.message,
-    });
+    return errorHandler({ statusCode: 500, message: "Server error" }, res);
   }
 };
 
@@ -88,19 +69,11 @@ try {
   const user = req.user;
   const dbUser = await User.findOne({_id : user.id}).select("-password");
   if(!dbUser){
-    return res.status(400).json({
-      message : "User Not Found"
-    })
+    return sendResponse(res, 400, false, "User Not Found");
   }
-  return res.status(200).json({
-    message: "User found succesfully",
-    data: dbUser,
-  });
+  return sendResponse(res, 200, true, "User found successfully", dbUser);
 } catch (error) {
-      return res.status(500).json({
-      message: "Server error",
-      error: error.message,
-    });
+      return errorHandler(error, res);
 }
 };
 module.exports = { register, login, getUser };

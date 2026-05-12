@@ -1,5 +1,7 @@
 const Job = require("../models/job");
 const mongoose = require("mongoose");
+const sendResponse = require("../utils/response");
+const errorHandler = require("../utils/error");
 
 const createJob = async (req, res) => {
   try {
@@ -25,15 +27,11 @@ const createJob = async (req, res) => {
       !skillsRequired ||
       !applicationDeadline
     ) {
-      return res.status(400).json({
-        message: "Required fields are missing",
-      });
+      return sendResponse(res, 400, false, "Required fields are missing");
     }
 
     if (!Array.isArray(skillsRequired) || skillsRequired.length === 0) {
-      return res.status(400).json({
-        message: "skillsRequired must be a non-empty array",
-      });
+      return sendResponse(res, 400, false, "skillsRequired must be a non-empty array");
     }
 
     const normalizedSkills = skillsRequired.map((skill) =>
@@ -41,16 +39,12 @@ const createJob = async (req, res) => {
     );
 
     if (experience && (experience.min < 0 || experience.max < experience.min)) {
-      return res.status(400).json({
-        message: "Invalid experience range",
-      });
+      return sendResponse(res, 400, false, "Invalid experience range");
     }
 
     const validTypes = ["Full-Time", "Part-Time", "Internship", "Contract"];
     if (!validTypes.includes(jobType)) {
-      return res.status(400).json({
-        message: "Invalid job type",
-      });
+      return sendResponse(res, 400, false, "Invalid job type");
     }
 
     const job = await Job.create({
@@ -67,15 +61,9 @@ const createJob = async (req, res) => {
       createdBy: req.user.id,
     });
 
-    return res.status(201).json({
-      message: "Job created successfully",
-      data: job,
-    });
+    return sendResponse(res, 201, true, "Job created successfully", job);
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Internal Server Error",
-    });
+    return errorHandler(error, res);
   }
 };
 
@@ -91,7 +79,7 @@ const getJobs = async (req, res) => {
       skillsRequired,
       createdBy,
       page = 1,
-      limit = 10
+      limit = 10,
     } = req.body;
 
     let query = {
@@ -155,13 +143,7 @@ const getJobs = async (req, res) => {
 
     // 🔹 createdBy
     if (createdBy) {
-      if (!mongoose.Types.ObjectId.isValid(createdBy)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid user ID format",
-        });
-      }
-      query.createdBy = new mongoose.Types.ObjectId(createdBy);
+      query.createdBy = createdBy;
     }
 
     // 🔹 Pagination
@@ -169,17 +151,13 @@ const getJobs = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const jobs = await Job.find(query)
-      .skip(skip)
-      .limit(limitNum);
+    const jobs = await Job.find(query).sort({createdBy : -1}).skip(skip).limit(limitNum);
 
     const totalCount = await Job.countDocuments(query);
     const totalPages = Math.ceil(totalCount / limitNum);
 
-    return res.status(200).json({
-      success: true,
-      message: "Jobs retrieved successfully",
-      data: jobs,
+    return sendResponse(res, 200, true, "Jobs retrieved successfully", {
+      jobs,
       pagination: {
         currentPage: pageNum,
         pageSize: limitNum,
@@ -189,14 +167,172 @@ const getJobs = async (req, res) => {
         hasPrevPage: pageNum > 1,
       },
     });
-
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return errorHandler(error, res);
   }
 };
-module.exports = { createJob, getJobs };
+
+const getJobById = async (req, res) => {
+  try {
+    const id = req.query.id;
+
+    if (!id) {
+      return sendResponse(res, 400, false, "Invalid Id!!");
+    }
+
+
+    const job = await Job.findById(id);
+    if(job.isDeleted){
+    return sendResponse(res, 400, false, "Job not found!!");
+    }
+    return sendResponse(res, 200, true, "Job fetched successfully", job);
+  } catch (error) {
+    return errorHandler(error, res);
+  }
+};
+
+const updateJob = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const {
+      title,
+      description,
+      companyName,
+      location,
+      jobType,
+      experience,
+      salary,
+      skillsRequired,
+      openings,
+      applicationDeadline,
+    } = req.body;
+
+    if (!id) {
+      return sendResponse(res, 400, false, "Job ID is required");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendResponse(res, 400, false, "Invalid job ID");
+    }
+
+    const job = await Job.findById(id);
+
+    if (!job) {
+      return sendResponse(res, 404, false, "Job not found");
+    }
+
+    if (job.createdBy.toString() !== req.user.id) {
+      return sendResponse(res, 403, false, "You cannot update this job");
+    }
+
+    if (skillsRequired && Array.isArray(skillsRequired)) {
+      if (skillsRequired.length === 0) {
+        return sendResponse(res, 400, false, "skillsRequired must be a non-empty array");
+      }
+    }
+
+    const normalizedSkills = skillsRequired
+      ? skillsRequired.map((skill) => skill.trim().toLowerCase())
+      : job.skillsRequired;
+
+    const updatedJob = await Job.findByIdAndUpdate(
+      id,
+      {
+        title: title || job.title,
+        description: description || job.description,
+        companyName: companyName || job.companyName,
+        location: location || job.location,
+        jobType: jobType || job.jobType,
+        experience: {
+          min: experience?.min ?? job.experience.min,
+          max: experience?.max ?? job.experience.max,
+        },
+        salary: {
+          min: salary?.min ?? job.salary.min,
+          max: salary?.max ?? job.salary.max,
+        },
+        skillsRequired: normalizedSkills,
+        openings: openings ?? job.openings,
+        applicationDeadline: applicationDeadline || job.applicationDeadline,
+      },
+      { new: true },
+    );
+
+    return sendResponse(res, 200, true, "Job updated successfully", updatedJob);
+  } catch (error) {
+    return errorHandler(error, res);
+  }
+};
+
+const deleteJob = async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    if (!id) {
+      return sendResponse(res, 400, false, "Job ID is required");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendResponse(res, 400, false, "Invalid job ID");
+    }
+
+    const job = await Job.findById(id);
+
+    if (!job) {
+      return sendResponse(res, 404, false, "Job not found");
+    }
+
+    if (job.createdBy.toString() !== req.user.id) {
+      return sendResponse(res, 403, false, "You cannot delete this job");
+    }
+
+    await Job.findByIdAndUpdate(id, { isDeleted: true }, { new: true });
+
+    return sendResponse(res, 200, true, "Job deleted successfully");
+  } catch (error) {
+    return errorHandler(error, res);
+  }
+};
+
+const toggleJob = async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    if (!id) {
+      return sendResponse(res, 400, false, "Job ID is required");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendResponse(res, 400, false, "Invalid job ID");
+    }
+
+    const job = await Job.findById(id);
+
+    if (!job) {
+      return sendResponse(res, 404, false, "Job not found");
+    }
+
+    if (job.createdBy.toString() !== req.user.id) {
+      return sendResponse(res, 403, false, "You cannot toggle this job");
+    }
+
+    const updatedJob = await Job.findByIdAndUpdate(
+      id,
+      { isActive: !job.isActive },
+      { new: true },
+    );
+
+    return sendResponse(res, 200, true, updatedJob.isActive ? "Job activated" : "Job deactivated", updatedJob);
+  } catch (error) {
+    return errorHandler(error, res);
+  }
+};
+
+module.exports = {
+  createJob,
+  getJobs,
+  getJobById,
+  updateJob,
+  deleteJob,
+  toggleJob,
+};

@@ -3,6 +3,7 @@ const User = require("../models/user");
 const jwt = require("jsonwebtoken");
 const sendResponse = require("../utils/response");
 const errorHandler = require("../utils/error");
+const { uploadToCloudinary } = require("../utils/cloudinary");
 
 const register = async (req, res) => {
   try {
@@ -20,11 +21,20 @@ const register = async (req, res) => {
 
     const hashPassword = await bcrypt.hash(password, 10);
 
+    let companyLogo = "";
+    if (req.file && req.file.buffer) {
+      const result = await uploadToCloudinary(req.file.buffer, {
+        folder: "hirelog_logos",
+      });
+      companyLogo = result.secure_url;
+    }
+
     await User.create({
       name,
       email,
       password: hashPassword,
       role,
+      companyLogo,
     });
 
     return sendResponse(res, 201, true, "User created successfully");

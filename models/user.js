@@ -6,7 +6,6 @@ const userSchema = new mongoose.Schema({
     },
     email :{
         type : String,
-        require : true,
         unique : true
     },
     password : {
@@ -18,6 +17,10 @@ const userSchema = new mongoose.Schema({
         require : true,
         enum: ["job_seeker", "employer"]
     },
+    companyLogo :{
+        type : String,
+        default : ""
+    }
 })
 
 const User = new mongoose.model("User", userSchema);

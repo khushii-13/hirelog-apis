@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const sendResponse = require("../utils/response");
 const errorHandler = require("../utils/error");
 const { uploadToCloudinary } = require("../utils/cloudinary");
+const { sendLoginEmail } = require("../utils/email");
 
 const register = async (req, res) => {
   try {
@@ -66,6 +67,9 @@ const login = async (req, res) => {
     };
     const SECRET_KEY = process.env.SECRET_KEY;
     const token = jwt.sign(data, SECRET_KEY, { expiresIn: "2h" });
+
+    // Dispatch login email asynchronously
+    sendLoginEmail(userExists.email, userExists.name);
 
     return sendResponse(res, 200, true, "Login successful", { token });
   } catch (error) {

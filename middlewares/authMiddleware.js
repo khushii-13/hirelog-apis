@@ -3,13 +3,18 @@ const SECRET_KEY = process.env.SECRET_KEY;
 
 const authMiddleware =  (req, res, next) => {
   try {
-    const token = req.headers.htoken;
+    let token = req.headers.authorization;
 
     if (!token) {
       return res.status(400).json({
         message: "No token provided",
       });
     }
+
+    if (token.startsWith("Bearer ")) {
+      token = token.split(" ")[1];
+    }
+
     const decoded = jwt.verify(token, SECRET_KEY);
     req.user = decoded;
     next();

@@ -26,6 +26,10 @@ app.use("/api/private/job", jobRouter);
 app.use("/api/private/applications", applicationRouter);
 app.use("/api/private/dashboard", dashboardRouter);
 
+const swaggerSpec = require("./utils/swagger");
+const swaggerUi = require("swagger-ui-express");
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 const startServer = async () => {
   try {
     await mongoose.connect(MONGO_URL);

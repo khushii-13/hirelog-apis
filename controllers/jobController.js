@@ -104,38 +104,6 @@ const getJobs = async (req, res) => {
       query.jobType = jobType;
     }
 
-    // if (experience) {
-    //   query.$and = query.$and || [];
-
-    //   if (experience.min !== undefined) {
-    //     query.$and.push({
-    //       "experience.max": { $gte: experience.min }
-    //     });
-    //   }
-
-    //   if (experience.max !== undefined) {
-    //     query.$and.push({
-    //       "experience.min": { $lte: experience.max }
-    //     });
-    //   }
-    // }
-
-    // if (salary) {
-    //   query.$and = query.$and || [];
-
-    //   if (salary.min !== undefined) {
-    //     query.$and.push({
-    //       "salary.max": { $gte: salary.min }
-    //     });
-    //   }
-
-    //   if (salary.max !== undefined) {
-    //     query.$and.push({
-    //       "salary.min": { $lte: salary.max }
-    //     });
-    //   }
-    // }
-
     // 🔹 Skills
     if (skillsRequired && skillsRequired.length > 0) {
       query.skillsRequired = { $in: skillsRequired };
@@ -179,7 +147,6 @@ const getJobById = async (req, res) => {
     if (!id) {
       return sendResponse(res, 400, false, "Invalid Id!!");
     }
-
 
     const job = await Job.findById(id);
     if(job.isDeleted){

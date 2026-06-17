@@ -68,7 +68,6 @@ const getMyApplications = async (req, res) => {
       .limit(limitNum)
       .sort({ appliedAt: -1 });
 
-
     const totalCount = await Application.countDocuments(query);
     const totalPages = Math.ceil(totalCount / limitNum);
 
@@ -92,7 +91,6 @@ const getJobApplications = async (req, res) => {
   try {
     const jobId = req.params.jobId;
     const { page = 1, limit = 10, status } = req.body;
-
 
     if (!mongoose.Types.ObjectId.isValid(jobId)) {
       return sendResponse(res, 400, false, "Invalid job ID");
@@ -150,7 +148,6 @@ const updateApplicationStatus = async (req, res) => {
     const id = req.params.id;
     const { status } = req.body;
 
-
     if (!status) {
       return sendResponse(res, 400, false, "Status is required");
     }
@@ -158,7 +155,6 @@ const updateApplicationStatus = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return sendResponse(res, 400, false, "Invalid application ID");
     }
-
 
     const application = await Application.findById(id).populate("job");
 
@@ -185,7 +181,6 @@ const updateApplicationStatus = async (req, res) => {
 const deleteApplication = async (req, res) => {
   try {
     const id = req.params.id;
-
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return sendResponse(res, 400, false, "Invalid application ID");

@@ -5,7 +5,7 @@ const options = {
   definition: {
     openapi: "3.0.0",
     info: {
-      title: "HireLog API",
+      title: "HireLog APIs",
       version: "1.0.0",
       description: "API documentation for the HireLog platform",
     },

@@ -28,7 +28,28 @@ app.use("/api/private/dashboard", dashboardRouter);
 
 const swaggerSpec = require("./utils/swagger");
 const swaggerUi = require("swagger-ui-express");
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+const setToken = {
+  swaggerOptions: {
+    responseInterceptor: (response) => {
+      if (response.url.includes("/login")) {
+        try {
+          const data = JSON.parse(response.text);
+          const token = data?.data?.token || data?.token;
+          
+          if (token) {
+            ui.preauthorizeApiKey("bearerAuth", token);
+          }
+        } catch (e) {
+          console.error("Swagger token injection failed", e);
+        }
+      }
+      return response;
+    }
+  }
+};
+
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, setToken));
 
 const startServer = async () => {
   try {

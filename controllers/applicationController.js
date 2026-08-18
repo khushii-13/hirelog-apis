@@ -48,7 +48,7 @@ const apply = async (req, res) => {
 
 const getMyApplications = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status } = req.body;
+    const { page = 1, limit = 10, status } = req.body || {};
 
     let query = {
       applicant: req.user.id,
@@ -90,7 +90,8 @@ const getMyApplications = async (req, res) => {
 const getJobApplications = async (req, res) => {
   try {
     const jobId = req.params.jobId;
-    const { page = 1, limit = 10, status } = req.body;
+    // Safely check req.body or req.query (since this is a GET route in Express)
+    const { page = 1, limit = 10, status } = req.body || req.query || {};
 
     if (!mongoose.Types.ObjectId.isValid(jobId)) {
       return sendResponse(res, 400, false, "Invalid job ID");

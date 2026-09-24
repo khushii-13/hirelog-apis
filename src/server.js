@@ -1,21 +1,17 @@
 const dotenv = require("dotenv");
 dotenv.config();
 
-const mongoose = require("mongoose");
 const app = require("./app");
+const pool = require("./config/db");
 
 const HOST = process.env.HOST || "localhost";
 const PORT = process.env.PORT || 8000;
-const MONGO_URL = process.env.MONGO_URL;
 
 const startServer = async () => {
   try {
-    if (!MONGO_URL) {
-      console.warn("WARNING: MONGO_URL is not defined in environment variables.");
-    } else {
-      await mongoose.connect(MONGO_URL);
-      console.log("Database connected successfully");
-    }
+    // Test the database connection
+    await pool.getConnection();
+    console.log("Database connected successfully");
 
     app.listen(PORT, () => {
       console.log(`Server is listening on http://${HOST}:${PORT}`);

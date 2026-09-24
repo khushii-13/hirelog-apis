@@ -1,7 +1,7 @@
 const express = require("express");
 const morgan = require("morgan");
 const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("./utils/swagger");
+const swaggerSpec = require("./config/swagger");
 
 const authRouter = require("./routes/auth");
 const userRouter = require("./routes/user");

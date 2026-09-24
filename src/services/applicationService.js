@@ -1,68 +1,65 @@
-const Application = require("../models/application");
-const Job = require("../models/job");
-const mongoose = require("mongoose");
+const pool = require("../config/db");
 
 const applyForJob = async (jobId, userId) => {
-  if (!mongoose.Types.ObjectId.isValid(jobId)) {
-    const error = new Error("Invalid job ID");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const job = await Job.findById(jobId);
-  if (!job) {
+  const [jobs] = await pool.query("SELECT * FROM jobs WHERE id = ?", [jobId]);
+  if (jobs.length === 0) {
     const error = new Error("Job not found");
     error.statusCode = 404;
     throw error;
   }
+  const job = jobs[0];
 
-  if (job.isDeleted) {
+  if (job.is_deleted) {
     const error = new Error("This job is no longer available");
     error.statusCode = 400;
     throw error;
   }
 
-  const existingApplication = await Application.findOne({
-    job: jobId,
-    applicant: userId,
-  });
-
-  if (existingApplication) {
+  const [existingApplication] = await pool.query("SELECT * FROM applications WHERE job_id = ? AND applicant_id = ?", [jobId, userId]);
+  
+  if (existingApplication.length > 0) {
     const error = new Error("You have already applied for this job");
     error.statusCode = 400;
     throw error;
   }
 
-  const application = await Application.create({
-    job: jobId,
-    applicant: userId,
-  });
+  const [result] = await pool.query(
+    "INSERT INTO applications (job_id, applicant_id) VALUES (?, ?)",
+    [jobId, userId]
+  );
 
-  return application;
+  return { id: result.insertId, jobId, applicantId: userId, status: 'applied' };
 };
 
 const getMyApplications = async (userId, options = {}) => {
   const { page = 1, limit = 10, status } = options;
 
-  let query = {
-    applicant: userId,
-  };
+  let query = `
+    SELECT a.*, j.title, j.company_name, j.location, j.job_type 
+    FROM applications a 
+    JOIN jobs j ON a.job_id = j.id 
+    WHERE a.applicant_id = ?
+  `;
+  let countQuery = "SELECT COUNT(*) as count FROM applications WHERE applicant_id = ?";
+  const params = [userId];
 
   if (status) {
-    query.status = status;
+    query += " AND a.status = ?";
+    countQuery += " AND status = ?";
+    params.push(status);
   }
 
   const pageNum = parseInt(page) || 1;
   const limitNum = parseInt(limit) || 10;
   const skip = (pageNum - 1) * limitNum;
 
-  const applications = await Application.find(query)
-    .populate("job", "title companyName location jobType")
-    .skip(skip)
-    .limit(limitNum)
-    .sort({ appliedAt: -1 });
+  query += " ORDER BY a.applied_at DESC LIMIT ? OFFSET ?";
+  const queryParams = [...params, limitNum, skip];
 
-  const totalCount = await Application.countDocuments(query);
+  const [applications] = await pool.query(query, queryParams);
+  const [countResult] = await pool.query(countQuery, params);
+  
+  const totalCount = countResult[0].count;
   const totalPages = Math.ceil(totalCount / limitNum);
 
   return {
@@ -79,20 +76,14 @@ const getMyApplications = async (userId, options = {}) => {
 };
 
 const getJobApplications = async (jobId, userId, options = {}) => {
-  if (!mongoose.Types.ObjectId.isValid(jobId)) {
-    const error = new Error("Invalid job ID");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const job = await Job.findById(jobId);
-  if (!job) {
+  const [jobs] = await pool.query("SELECT * FROM jobs WHERE id = ?", [jobId]);
+  if (jobs.length === 0) {
     const error = new Error("Job not found");
     error.statusCode = 404;
     throw error;
   }
 
-  if (job.createdBy.toString() !== userId) {
+  if (jobs[0].created_by != userId) {
     const error = new Error("You cannot view applications for this job");
     error.statusCode = 403;
     throw error;
@@ -100,25 +91,32 @@ const getJobApplications = async (jobId, userId, options = {}) => {
 
   const { page = 1, limit = 10, status } = options;
 
-  let query = {
-    job: jobId,
-  };
+  let query = `
+    SELECT a.*, u.name, u.email 
+    FROM applications a 
+    JOIN users u ON a.applicant_id = u.id 
+    WHERE a.job_id = ?
+  `;
+  let countQuery = "SELECT COUNT(*) as count FROM applications WHERE job_id = ?";
+  const params = [jobId];
 
   if (status) {
-    query.status = status;
+    query += " AND a.status = ?";
+    countQuery += " AND status = ?";
+    params.push(status);
   }
 
   const pageNum = parseInt(page) || 1;
   const limitNum = parseInt(limit) || 10;
   const skip = (pageNum - 1) * limitNum;
 
-  const applications = await Application.find(query)
-    .populate("applicant", "name email")
-    .skip(skip)
-    .limit(limitNum)
-    .sort({ appliedAt: -1 });
+  query += " ORDER BY a.applied_at DESC LIMIT ? OFFSET ?";
+  const queryParams = [...params, limitNum, skip];
 
-  const totalCount = await Application.countDocuments(query);
+  const [applications] = await pool.query(query, queryParams);
+  const [countResult] = await pool.query(countQuery, params);
+
+  const totalCount = countResult[0].count;
   const totalPages = Math.ceil(totalCount / limitNum);
 
   return {
@@ -135,55 +133,54 @@ const getJobApplications = async (jobId, userId, options = {}) => {
 };
 
 const updateApplicationStatus = async (id, status, userId) => {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    const error = new Error("Invalid application ID");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const application = await Application.findById(id).populate("job");
-  if (!application) {
+  const [applications] = await pool.query(`
+    SELECT a.*, j.created_by 
+    FROM applications a 
+    JOIN jobs j ON a.job_id = j.id 
+    WHERE a.id = ?
+  `, [id]);
+  
+  if (applications.length === 0) {
     const error = new Error("Application not found");
     error.statusCode = 404;
     throw error;
   }
+  
+  const application = applications[0];
 
-  if (application.job.createdBy.toString() !== userId) {
+  if (application.created_by != userId) {
     const error = new Error("You cannot update this application");
     error.statusCode = 403;
     throw error;
   }
 
-  const updatedApplication = await Application.findByIdAndUpdate(
-    id,
-    { status: status },
-    { new: true, runValidators: true },
-  ).populate("applicant", "name email");
-
-  return updatedApplication;
+  await pool.query("UPDATE applications SET status = ? WHERE id = ?", [status, id]);
+  
+  const [updatedApplications] = await pool.query(`
+    SELECT a.*, u.name, u.email 
+    FROM applications a 
+    JOIN users u ON a.applicant_id = u.id 
+    WHERE a.id = ?
+  `, [id]);
+  
+  return updatedApplications[0];
 };
 
 const deleteApplication = async (id, userId) => {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    const error = new Error("Invalid application ID");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const application = await Application.findById(id);
-  if (!application) {
+  const [applications] = await pool.query("SELECT * FROM applications WHERE id = ?", [id]);
+  if (applications.length === 0) {
     const error = new Error("Application not found");
     error.statusCode = 404;
     throw error;
   }
 
-  if (application.applicant.toString() !== userId) {
+  if (applications[0].applicant_id != userId) {
     const error = new Error("You cannot delete this application");
     error.statusCode = 403;
     throw error;
   }
 
-  await Application.findByIdAndDelete(id);
+  await pool.query("DELETE FROM applications WHERE id = ?", [id]);
   return true;
 };
 

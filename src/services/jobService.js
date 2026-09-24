@@ -1,5 +1,4 @@
-const Job = require("../models/job");
-const mongoose = require("mongoose");
+const pool = require("../config/db");
 
 const createJob = async (jobData, userId) => {
   const {
@@ -15,25 +14,34 @@ const createJob = async (jobData, userId) => {
     applicationDeadline,
   } = jobData;
 
-  const normalizedSkills = skillsRequired.map((skill) =>
-    skill.trim().toLowerCase(),
-  );
+  const normalizedSkills = (skillsRequired || []).map((skill) => skill.trim().toLowerCase());
 
-  const job = await Job.create({
+  const query = `
+    INSERT INTO jobs (
+      title, description, company_name, location, job_type, 
+      experience_min, experience_max, salary_min, salary_max, 
+      skills_required, openings, application_deadline, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  
+  const values = [
     title,
     description,
     companyName,
     location,
     jobType,
-    experience,
-    salary,
-    skillsRequired: normalizedSkills,
-    openings,
-    applicationDeadline,
-    createdBy: userId,
-  });
+    experience?.min || null,
+    experience?.max || null,
+    salary?.min || 0,
+    salary?.max || 0,
+    JSON.stringify(normalizedSkills),
+    openings || 1,
+    applicationDeadline || null,
+    userId
+  ];
 
-  return job;
+  const [result] = await pool.query(query, values);
+  return { id: result.insertId, ...jobData, createdBy: userId };
 };
 
 const getJobs = async (filterParams) => {
@@ -48,45 +56,46 @@ const getJobs = async (filterParams) => {
     limit = 10,
   } = filterParams;
 
-  let query = {
-    isActive: true,
-    isDeleted: false,
-  };
+  let query = "SELECT * FROM jobs WHERE is_active = TRUE AND is_deleted = FALSE";
+  let countQuery = "SELECT COUNT(*) as count FROM jobs WHERE is_active = TRUE AND is_deleted = FALSE";
+  const params = [];
 
   if (title) {
-    query.title = { $regex: title, $options: "i" };
+    query += " AND title LIKE ?";
+    countQuery += " AND title LIKE ?";
+    params.push(`%${title}%`);
   }
-
   if (companyName) {
-    query.companyName = { $regex: companyName, $options: "i" };
+    query += " AND company_name LIKE ?";
+    countQuery += " AND company_name LIKE ?";
+    params.push(`%${companyName}%`);
   }
-
   if (location) {
-    query.location = { $regex: location, $options: "i" };
+    query += " AND location LIKE ?";
+    countQuery += " AND location LIKE ?";
+    params.push(`%${location}%`);
   }
-
   if (jobType) {
-    query.jobType = jobType;
+    query += " AND job_type = ?";
+    countQuery += " AND job_type = ?";
+    params.push(jobType);
   }
-
-  if (skillsRequired && skillsRequired.length > 0) {
-    query.skillsRequired = { $in: skillsRequired };
-  }
-
   if (createdBy) {
-    query.createdBy = createdBy;
+    query += " AND created_by = ?";
+    countQuery += " AND created_by = ?";
+    params.push(createdBy);
   }
 
   const pageNum = parseInt(page) || 1;
   const limitNum = parseInt(limit) || 10;
   const skip = (pageNum - 1) * limitNum;
 
-  const jobs = await Job.find(query)
-    .sort({ createdBy: -1 })
-    .skip(skip)
-    .limit(limitNum);
+  query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+  const queryParams = [...params, limitNum, skip];
 
-  const totalCount = await Job.countDocuments(query);
+  const [jobs] = await pool.query(query, queryParams);
+  const [countResult] = await pool.query(countQuery, params);
+  const totalCount = countResult[0].count;
   const totalPages = Math.ceil(totalCount / limitNum);
 
   return {
@@ -103,37 +112,25 @@ const getJobs = async (filterParams) => {
 };
 
 const getJobById = async (id) => {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    const error = new Error("Invalid Id!!");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const job = await Job.findById(id);
-  if (!job || job.isDeleted) {
+  const [jobs] = await pool.query("SELECT * FROM jobs WHERE id = ? AND is_deleted = FALSE", [id]);
+  if (jobs.length === 0) {
     const error = new Error("Job not found!!");
     error.statusCode = 400;
     throw error;
   }
-
-  return job;
+  return jobs[0];
 };
 
 const updateJob = async (id, updateData, userId) => {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    const error = new Error("Invalid job ID");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const job = await Job.findById(id);
-  if (!job) {
+  const [jobs] = await pool.query("SELECT * FROM jobs WHERE id = ?", [id]);
+  if (jobs.length === 0) {
     const error = new Error("Job not found");
     error.statusCode = 404;
     throw error;
   }
+  const job = jobs[0];
 
-  if (job.createdBy.toString() !== userId) {
+  if (job.created_by != userId) {
     const error = new Error("You cannot update this job");
     error.statusCode = 403;
     throw error;
@@ -153,86 +150,70 @@ const updateJob = async (id, updateData, userId) => {
   } = updateData;
 
   const normalizedSkills = skillsRequired
-    ? skillsRequired.map((skill) => skill.trim().toLowerCase())
-    : job.skillsRequired;
+    ? JSON.stringify(skillsRequired.map((skill) => skill.trim().toLowerCase()))
+    : job.skills_required;
 
-  const updatedJob = await Job.findByIdAndUpdate(
-    id,
-    {
-      title: title || job.title,
-      description: description || job.description,
-      companyName: companyName || job.companyName,
-      location: location || job.location,
-      jobType: jobType || job.jobType,
-      experience: {
-        min: experience?.min ?? job.experience?.min,
-        max: experience?.max ?? job.experience?.max,
-      },
-      salary: {
-        min: salary?.min ?? job.salary?.min,
-        max: salary?.max ?? job.salary?.max,
-      },
-      skillsRequired: normalizedSkills,
-      openings: openings ?? job.openings,
-      applicationDeadline: applicationDeadline || job.applicationDeadline,
-    },
-    { new: true },
-  );
+  await pool.query(`
+    UPDATE jobs SET 
+      title = ?, description = ?, company_name = ?, location = ?, job_type = ?, 
+      experience_min = ?, experience_max = ?, salary_min = ?, salary_max = ?, 
+      skills_required = ?, openings = ?, application_deadline = ?
+    WHERE id = ?
+  `, [
+    title || job.title,
+    description || job.description,
+    companyName || job.company_name,
+    location || job.location,
+    jobType || job.job_type,
+    experience?.min ?? job.experience_min,
+    experience?.max ?? job.experience_max,
+    salary?.min ?? job.salary_min,
+    salary?.max ?? job.salary_max,
+    normalizedSkills,
+    openings ?? job.openings,
+    applicationDeadline || job.application_deadline,
+    id
+  ]);
 
-  return updatedJob;
+  const [updatedJobs] = await pool.query("SELECT * FROM jobs WHERE id = ?", [id]);
+  return updatedJobs[0];
 };
 
 const deleteJob = async (id, userId) => {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    const error = new Error("Invalid job ID");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const job = await Job.findById(id);
-  if (!job) {
+  const [jobs] = await pool.query("SELECT * FROM jobs WHERE id = ?", [id]);
+  if (jobs.length === 0) {
     const error = new Error("Job not found");
     error.statusCode = 404;
     throw error;
   }
 
-  if (job.createdBy.toString() !== userId) {
+  if (jobs[0].created_by != userId) {
     const error = new Error("You cannot delete this job");
     error.statusCode = 403;
     throw error;
   }
 
-  await Job.findByIdAndUpdate(id, { isDeleted: true }, { new: true });
+  await pool.query("UPDATE jobs SET is_deleted = TRUE WHERE id = ?", [id]);
   return true;
 };
 
 const toggleJob = async (id, userId) => {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    const error = new Error("Invalid job ID");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const job = await Job.findById(id);
-  if (!job) {
+  const [jobs] = await pool.query("SELECT * FROM jobs WHERE id = ?", [id]);
+  if (jobs.length === 0) {
     const error = new Error("Job not found");
     error.statusCode = 404;
     throw error;
   }
 
-  if (job.createdBy.toString() !== userId) {
+  if (jobs[0].created_by != userId) {
     const error = new Error("You cannot toggle this job");
     error.statusCode = 403;
     throw error;
   }
 
-  const updatedJob = await Job.findByIdAndUpdate(
-    id,
-    { isActive: !job.isActive },
-    { new: true },
-  );
-
-  return updatedJob;
+  await pool.query("UPDATE jobs SET is_active = NOT is_active WHERE id = ?", [id]);
+  const [updatedJobs] = await pool.query("SELECT * FROM jobs WHERE id = ?", [id]);
+  return updatedJobs[0];
 };
 
 module.exports = {
